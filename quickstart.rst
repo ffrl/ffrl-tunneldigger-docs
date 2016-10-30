@@ -28,7 +28,7 @@ Für den Broker-Dienst müssen die folgenden Kernel-Module geladen sein:
 Zusätzlich muss der Kernel NAT via Netfilter unterstützen, ansonsten kann Tunneldigger nicht alle Tunnel über den selben externen Port laufen lassen. Dies ist normalerweise der Fall.
 Diese Modules sollten beim booten geladen werden, indem diese in ``/etc/modules`` hinterlegt werden.
 
-Zu den Kernel Modulen werden auch noch Software Pakete benötigt. Auf Debian sind es folgende::
+Zu den Kernel Modulen werden auch noch Software Pakete benötigt. Auf Debian sind es folgende:
 
 * iproute
 * bridge-utils
@@ -39,7 +39,7 @@ Zu den Kernel Modulen werden auch noch Software Pakete benötigt. Auf Debian sin
 * python-virtualenv
 
 Tunneldigger wird in einem so genanten "Python Virtual Environment" betrieben, dadurch können die Python-Pakete für Tunneldigger 
-seperat von den Python Paketen des Betriebssystems installiert werden. Dadurch soll vermieden werden, das die Pakete sich gegenseitig stören.
+seperat von den Python Paketen des Betriebssystems installiert werden. Dadurch soll vermieden werden, dass die Pakete sich gegenseitig stören.
 
 Um die oben aufgeführten Pakete zu installieren kann der folgende Befehl ausgeführt werden::
 
@@ -49,7 +49,7 @@ Installation
 ------------
 
 Diese Anleitung installiert den Broker unter ``/srv/tunneldigger``.
-Die Installation geschieht mittels:
+Die Installation geschieht mittels::
 
     mkdir /srv
     cd /srv
@@ -57,11 +57,10 @@ Die Installation geschieht mittels:
     virtualenv tunneldigger
 
 Als nächster Schritt werden die Abhängigkeiten für den Broker installiert.
-Dafür aktivieren wir die virtuelle Python-Umgebung und installieren die Pakete aus
-der Datei ``requirements.txt``
+Dafür aktivieren wir die virtuelle Python-Umgebung und installieren die Pakete aus der Datei ``requirements.txt``::
 
     cd /srv/tunneldigger
-    . bin/activate
+    source bin/activate
     pip install -r broker/requirements.txt
 
 Konfiguration
@@ -98,36 +97,34 @@ Hook-Scripts
 
 Die folgenden Hook-Scripts müssen unter ``/srv/tunneldigger/scripts`` abgelegt werden.
 
-Script: ``/srv/tunneldigger/scripts/session-up.sh``
-```
-#!/bin/bash
-INTERFACE="$3"
-UUID="$8"
+Script ``/srv/tunneldigger/scripts/session-up.sh``::
 
-log_message() {
-    message="$1"
-    logger -p 6 -t "Tunneldigger" "$message"
-    echo "$message" | systemd-cat -p info -t "Tunneldigger"
-    echo "$1" 1>&2
-}
+  #!/bin/bash
+  INTERFACE="$3"
+  UUID="$8"
 
-if /bin/grep -Fq $UUID /srv/tunneldigger/blacklist.txt; then
+  log_message() {
+        message="$1"
+        logger -p 6 -t "Tunneldigger" "$message"
+        echo "$message" | systemd-cat -p info -t "Tunneldigger"
+        echo "$1" 1>&2
+  }
+
+  if /bin/grep -Fq $UUID /srv/tunneldigger/blacklist.txt; then
         log_message "New client with UUID=$UUID is blacklisted, not adding to tunneldigger bridge interface"
-else
+  else
         log_message "New client with UUID=$UUID connected, adding to tunneldigger bridge interface"
         ip link set dev $INTERFACE up mtu 1364
         /sbin/brctl addif tunneldigger $INTERFACE
-fi
-```
+  fi
 
-Script: ``/srv/tunneldigger/scripts/session-pre-down.sh``
-```
-#!/bin/bash
-INTERFACE="$3"
 
-/sbin/brctl delif tunneldigger $INTERFACE
-exit 0
-```
+Script ``/srv/tunneldigger/scripts/session-pre-down.sh``::
+
+  #!/bin/bash
+  INTERFACE="$3"
+  /sbin/brctl delif tunneldigger $INTERFACE
+  exit 0
 
 Nicht vergessen die Scripts mittels ``chmod +x`` ausführbar zu machen!
 
@@ -145,31 +142,29 @@ Nach der Konfiguration von Tunneldigger müssen noch ein paar Dinge im Betriebss
 Start-Script und Systemd Unit
 -----------------------------
 
-Script: ``/srv/tunneldigger/start-broker.sh``
-```
-#!/bin/bash
+Script ``/srv/tunneldigger/start-broker.sh``::
 
-WDIR=/srv/tunneldigger
-VIRTUALENV_DIR=/srv/tunneldigger
+  #!/bin/bash
 
-cd $WDIR
-source $VIRTUALENV_DIR/bin/activate
+  WDIR=/srv/tunneldigger
+  VIRTUALENV_DIR=/srv/tunneldigger
 
-bin/python broker/l2tp_broker.py l2tp_broker.cfg
-```
+  cd $WDIR
+  source $VIRTUALENV_DIR/bin/activate
 
-Script: ``/etc/systemd/system/tunneldigger.service``
-```
-[Unit]
-Description = Start tunneldigger L2TPv3 broker
-After = network.target
+  bin/python broker/l2tp_broker.py l2tp_broker.cfg
 
-[Service]
-ExecStart = /srv/tunneldigger/start-broker.sh
+Script: ``/etc/systemd/system/tunneldigger.service``::
 
-[Install]
-WantedBy = multi-user.target
-```
+  [Unit]
+  Description = Start tunneldigger L2TPv3 broker
+  After = network.target
+
+  [Service]
+  ExecStart = /srv/tunneldigger/start-broker.sh
+
+  [Install]
+  WantedBy = multi-user.target
 
 Anschließend aktivieren wir den Tunneldigger Dienst, damit dieser beim booten startet::
 
@@ -182,31 +177,30 @@ Anschließend wird die Tunneldigger Bridge konfiguriert. Alle Tunnel werden in e
 Damit dies nicht zu Problemen mit Batman führt, müssen die Clients untereinander isoliert werden, denn die Kommunikation zwischen den Clients übernimmt Batman-Advanced.
 Dazu legen wir die folgende Datei an:
 
-Datei: ``/etc/network/interfaces.d/tunneldigger``
-```
-# Tunneldigger VPN Interface
-auto tunneldigger
-iface tunneldigger inet manual
-  ## Bring up interface
-  pre-up brctl addbr $IFACE
-  pre-up ip link set address 0A:BE:EF:25:00:01 dev $IFACE
-  pre-up ip link set dev $IFACE mtu 1364
-  pre-up ip link set $IFACE promisc on
-  up ip link set dev $IFACE up
-  post-up ebtables -A FORWARD --logical-in $IFACE -j DROP
-  post-up batctl if add $IFACE
-  # Shutdown interface
-  pre-down batctl if del $IFACE
-  pre-down ebtables -D FORWARD --logical-in $IFACE -j DROP
-  down ip link set dev $IFACE down
-  post-down brctl delbr $IFACE
-```
+Datei ``/etc/network/interfaces.d/tunneldigger``::
+
+  # Tunneldigger VPN Interface
+  auto tunneldigger
+  iface tunneldigger inet manual
+          ## Bring up interface
+          pre-up brctl addbr $IFACE
+          pre-up ip link set address 0A:BE:EF:25:00:01 dev $IFACE
+          pre-up ip link set dev $IFACE mtu 1364
+          pre-up ip link set $IFACE promisc on
+          up ip link set dev $IFACE up
+          post-up ebtables -A FORWARD --logical-in $IFACE -j DROP
+          post-up batctl if add $IFACE
+          # Shutdown interface
+          pre-down batctl if del $IFACE
+          pre-down ebtables -D FORWARD --logical-in $IFACE -j DROP
+          down ip link set dev $IFACE down
+          post-down brctl delbr $IFACE
 
 Hierbei muss die Interface MTU nach eigenen Wünschen angepasst werden, wir nutzen hier 1364 welches in Tests die besten Ergebnisse lieferte.
 Außerdem sollte eine eindeutige MAC Adresse für jeden Broker gewählt werden.
 
 
-Zum Abschluss starten wir das Tunneldigger-Bridge Interface sowie den Broker
+Zum Abschluss starten wir das Tunneldigger-Bridge Interface sowie den Broker::
 
     ifup tunneldigger
     systemctl start tunneldigger
