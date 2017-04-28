@@ -20,10 +20,14 @@ Abhängigkeiten
 Tunneldigger benötigt einen Linux Kernel (>= 2.6.36), welcher L2TPv3 unterstützt.
 Für den Broker-Dienst müssen die folgenden Kernel-Module geladen sein:
 
+* ip_conntrack
 * l2tp_core
 * l2tp_eth
 * l2tp_netlink
 * ebtables
+* nf_conntrack_netlink
+* nf_conntrack
+* nfnetlink
 
 Zusätzlich muss der Kernel NAT via Netfilter unterstützen, ansonsten kann Tunneldigger nicht alle Tunnel über den selben externen Port laufen lassen. Dies ist normalerweise der Fall.
 Diese Modules sollten beim booten geladen werden, indem diese in ``/etc/modules`` hinterlegt werden.
